@@ -1,4 +1,4 @@
-Store-It �
+Store-It 
 Smart Inventory Management for Small Businesses and Student Projects
 Store-It is an Android application that helps users track and manage inventory items from their phone. It supports real-time sync with Firebase, offline access, and CSV/Excel export for reporting and backups.
 Built as a team project for a software engineering course.
@@ -34,7 +34,7 @@ Other:
 RecyclerView for inventory list
 ViewModel + LiveData (or similar) for state management
 Gradle for build
-📐 High-Level Architecture
+High-Level Architecture
 UI Layer
 Activities/Fragments (e.g., MainActivity, AddItemActivity)
 RecyclerView + Adapter for displaying the inventory list
@@ -51,7 +51,7 @@ Utility class that:
 Reads all items from Firestore/local cache
 Generates a CSV (and/or Excel) file
 Shares/saves the file using Android’s Storage / Share Sheet
-� Getting Started
+Getting Started
 1. Prerequisites
 Android Studio (latest stable)
 Android SDK 24+ 
@@ -83,7 +83,7 @@ Open the project in Android Studio.
 Let Gradle sync.
 Select a device/emulator.
 Click Run ▶.
-📊 Using Store-It
+Using Store-It
 Create an account / sign in (if Auth is enabled).
 Add items with name, quantity, and other details.
 Edit or delete items from the main list.
@@ -92,7 +92,7 @@ Export your inventory:
 Open the menu (⋮)
 Tap “Export as CSV/Excel”
 Choose a location/app to save or share the file.
-🧪 Testing
+Testing
 Manual testing on emulator and physical device:
 Create/edit/delete items
 Network on/off scenarios (airplane mode)
