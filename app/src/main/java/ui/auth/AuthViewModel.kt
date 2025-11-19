@@ -86,15 +86,7 @@ class AuthViewModel(private val auth: FirebaseAuth) : ViewModel() {
 
     fun logout() {
         auth.signOut()
-        updateState {
-            // Reset the state to reflect no logged-in user
-            it.copy(
-                currentUser = null,
-                email = "",
-                password = "",
-                confirmPassword = ""
-            )
-        }
+        refreshCurrentUser(null)
     }
 
     class Factory(private val auth: FirebaseAuth) : ViewModelProvider.Factory {
