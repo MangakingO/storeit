@@ -9,6 +9,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -82,7 +83,8 @@ fun InventoryScreen(
     navController: NavController,
     authViewModel: AuthViewModel,
     inventoryViewModel: InventoryViewModel,
-    userId: String
+    userId: String,
+    onToggleTheme: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var showTopMenu by remember { mutableStateOf(false) }
@@ -140,6 +142,14 @@ fun InventoryScreen(
                                 }
                             },
                             leadingIcon = { Icon(Icons.Default.Sync, "Sync") }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (isSystemInDarkTheme()) "Light Mode" else "Dark Mode") },
+                            onClick = {
+                                showTopMenu = false
+                                onToggleTheme()
+                            },
+                            leadingIcon = { Icon(painterResource(id = R.drawable.themetoggle), null) }
                         )
                         DropdownMenuItem(
                             text = { Text("Logout") },

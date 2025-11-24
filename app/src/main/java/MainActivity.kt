@@ -4,16 +4,18 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.storeit.ui.auth.AuthViewModel
+import com.example.storeit.data.InventoryRepository
 import com.example.storeit.ui.auth.AuthScreen
+import com.example.storeit.ui.auth.AuthViewModel
 import com.example.storeit.ui.inventory.InventoryScreen
 import com.example.storeit.ui.inventory.InventoryViewModel
-import com.example.storeit.data.InventoryRepository
 import com.example.storeit.ui.theme.StoreitTheme
+import com.example.storeit.ui.Reports
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreSettings
@@ -35,7 +37,9 @@ class MainActivity : ComponentActivity() {
         val inventoryRepository = InventoryRepository(firestore)
 
         setContent {
-            StoreitTheme {
+            var isDarkTheme by remember { mutableStateOf(false) }
+
+            StoreitTheme(darkTheme = isDarkTheme) {
                 val navController = rememberNavController()
 
                 // Pick start destination based on authentication
@@ -114,8 +118,8 @@ class MainActivity : ComponentActivity() {
                                 navController = navController,
                                 authViewModel = authViewModel,
                                 inventoryViewModel = inventoryViewModel,
-                                userId = userId
-                            )
+                                userId = userId,
+                                onToggleTheme = { isDarkTheme = !isDarkTheme }                            )
                         }
                     }
 
