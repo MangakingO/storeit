@@ -3,7 +3,7 @@ package com.example.storeit.data
 import com.example.storeit.data.model.InventoryItem
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.firestore.ktx.toObjects
+import com.google.firebase.firestore.MetadataChanges
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -17,13 +17,17 @@ class InventoryRepository(private val firestore: FirebaseFirestore) {
     fun listenToItems(userId: String, onItemsUpdated: (List<InventoryItem>) -> Unit): ListenerRegistration {
         return userItemsCollection(userId)
             .orderBy("name")
-            .addSnapshotListener { snapshot, error ->
+            .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
                 if (error != null) {
                     error.printStackTrace()
                     return@addSnapshotListener
                 }
 
-                val items = snapshot?.toObjects<InventoryItem>() ?: emptyList()
+                val items = snapshot?.documents?.map { doc ->
+                    doc.toObject(InventoryItem::class.java)!!.apply {
+                        hasPendingWrites = doc.metadata.hasPendingWrites()
+                    }
+                } ?: emptyList()
                 onItemsUpdated(items)
             }
     }
@@ -36,7 +40,8 @@ class InventoryRepository(private val firestore: FirebaseFirestore) {
         price: String,
         inStock: Boolean,
         sku: String?,
-        imageRes: Int?
+        imageRes: Int?,
+        reorderPoint: Int?
     ) {
         val data = mutableMapOf<String, Any?>(
             "name" to name,
@@ -45,7 +50,8 @@ class InventoryRepository(private val firestore: FirebaseFirestore) {
             "price" to price,
             "inStock" to inStock,
             "sku" to sku,
-            "imageRes" to imageRes
+            "imageRes" to imageRes,
+            "reorderPoint" to reorderPoint
         )
         userItemsCollection(userId).add(data).await()
     }
@@ -59,7 +65,8 @@ class InventoryRepository(private val firestore: FirebaseFirestore) {
         price: String,
         inStock: Boolean,
         sku: String?,
-        imageRes: Int?
+        imageRes: Int?,
+        reorderPoint: Int?
     ) {
         val data = mutableMapOf<String, Any?>(
             "name" to name,
@@ -68,7 +75,8 @@ class InventoryRepository(private val firestore: FirebaseFirestore) {
             "price" to price,
             "inStock" to inStock,
             "sku" to sku,
-            "imageRes" to imageRes
+            "imageRes" to imageRes,
+            "reorderPoint" to reorderPoint
         )
         userItemsCollection(userId).document(itemId).set(data).await()
     }

@@ -24,6 +24,7 @@ fun ItemEditorDialog(
     onDescriptionChanged: (String) -> Unit,
     onPriceChanged: (String) -> Unit,
     onSkuChanged: (String) -> Unit,
+    onReorderPointChanged: (String) -> Unit,
     onSave: () -> Unit
 ) {
     val isEditMode = editorState.id != null
@@ -67,6 +68,15 @@ fun ItemEditorDialog(
                     value = editorState.sku,
                     onValueChange = onSkuChanged,
                     label = { Text("SKU (Optional)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = editorState.reorderPoint,
+                    onValueChange = onReorderPointChanged,
+                    label = { Text("Reorder Point (Optional)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))

@@ -23,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-//import androidx.compose.ui.text.input.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -42,7 +41,7 @@ fun AuthScreen(
 ) {
     Surface (
         modifier = Modifier.fillMaxSize(),
-        color = Color(0xFFF5F2E9)
+        color = MaterialTheme.colorScheme.background
     ){
         Box(
             modifier = Modifier.fillMaxSize()

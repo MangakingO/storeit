@@ -55,7 +55,8 @@ class InventoryViewModel(private val repository: InventoryRepository) : ViewMode
                 price = item.price,
                 inStock = item.inStock,
                 sku = item.sku ?: "",
-                imageRes = item.imageRes
+                imageRes = item.imageRes,
+                reorderPoint = item.reorderPoint?.toString() ?: ""
             ),
             editorError = null
         )
@@ -95,6 +96,12 @@ class InventoryViewModel(private val repository: InventoryRepository) : ViewMode
         )
     }
 
+    fun updateEditorReorderPoint(reorderPoint: String) {
+        _uiState.value = _uiState.value.copy(
+            editorState = _uiState.value.editorState.copy(reorderPoint = reorderPoint)
+        )
+    }
+
 
     // -----------------------------
     // Save New OR Edited Item
@@ -113,6 +120,7 @@ class InventoryViewModel(private val repository: InventoryRepository) : ViewMode
 
         viewModelScope.launch {
             try {
+                val reorderPoint = editor.reorderPoint.toIntOrNull()
                 if (editor.id == null) {
                     repository.addItem(
                         userId,
@@ -122,7 +130,8 @@ class InventoryViewModel(private val repository: InventoryRepository) : ViewMode
                         editor.price,
                         editor.inStock,
                         editor.sku.ifBlank { null },
-                        editor.imageRes
+                        editor.imageRes,
+                        reorderPoint
                     )
                 } else {
                     repository.updateItem(
@@ -134,7 +143,8 @@ class InventoryViewModel(private val repository: InventoryRepository) : ViewMode
                         editor.price,
                         editor.inStock,
                         editor.sku.ifBlank { null },
-                        editor.imageRes
+                        editor.imageRes,
+                        reorderPoint
                     )
                 }
 

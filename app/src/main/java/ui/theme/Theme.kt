@@ -12,39 +12,35 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = StoreItBlue_Primary_Dark,
+    secondary = StoreItBlue_Secondary_Dark,
+    background = StoreItGrey_Background_Dark,
+    surface = StoreItGrey_Surface_Dark,
+    onPrimary = StoreItText_Primary_Dark,
+    onSecondary = StoreItText_Secondary_Dark,
+    onBackground = StoreItText_Primary_Dark,
+    onSurface = StoreItText_Primary_Dark,
+    error = StoreItRed_Error
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    primary = StoreItBlue_Primary,
+    secondary = StoreItBlue_Secondary,
+    background = StoreItGrey_Background,
+    surface = StoreItGrey_Surface,
+    onPrimary = StoreItText_Primary,
+    onSecondary = StoreItText_Secondary,
+    onBackground = StoreItText_Primary,
+    onSurface = StoreItText_Primary,
+    error = StoreItRed_Error
 )
 
 @Composable
 fun StoreitTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
@@ -55,4 +51,3 @@ fun StoreitTheme(
         content = content
     )
 }
-

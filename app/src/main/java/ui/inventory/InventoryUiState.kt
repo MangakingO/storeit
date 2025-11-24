@@ -18,7 +18,8 @@ data class ItemEditorState(
     val price: String = "",
     val inStock: Boolean = true,
     val sku: String = "",
-    val imageRes: Int? = null
+    val imageRes: Int? = null,
+    val reorderPoint: String = ""
 ) {
     val isValid: Boolean
         get() = name.isNotBlank() && quantity.toIntOrNull() != null && price.isNotBlank()

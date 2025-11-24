@@ -1,38 +1,80 @@
 package com.example.storeit.ui.inventory
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.input.KeyboardType
 import com.example.storeit.R
 import com.example.storeit.data.model.InventoryItem
 import com.example.storeit.ui.auth.AuthViewModel
+import com.example.storeit.ui.components.ItemDetailsDialog
 import com.example.storeit.ui.components.ItemEditorDialog
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextOverflow
+import com.example.storeit.utils.ConnectionState
+import com.example.storeit.utils.currentConnectionState
 import kotlinx.coroutines.launch
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,18 +87,23 @@ fun InventoryScreen(
     var searchQuery by remember { mutableStateOf("") }
     var showTopMenu by remember { mutableStateOf(false) }
 
-    var selectedItem by remember { mutableStateOf<InventoryItem?>(null) }
+    var selectedItems by remember { mutableStateOf<List<InventoryItem>>(emptyList()) }
     val uiState by inventoryViewModel.uiState.collectAsState(initial = InventoryUiState())
     val filteredItems = uiState.items.filter {
         it.name.contains(searchQuery, ignoreCase = true) ||
                 (it.sku?.contains(searchQuery, ignoreCase = true) ?: false)
     }
 
+    var itemForDetails by remember { mutableStateOf<InventoryItem?>(null) }
     var showItemDetailsDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmationDialog by remember { mutableStateOf(false) }
-    var showCheckmark by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    val connection by currentConnectionState()
+    val isOffline = connection === ConnectionState.Unavailable
+
+    val itemsToReorder = uiState.items.filter { it.needsReorder }
 
     // Open editor dialog
     val editorState = uiState.editorState
@@ -68,7 +115,6 @@ fun InventoryScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Inventory", fontWeight = FontWeight.Medium) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFF5F2E9)),
                 actions = {
                     IconButton(onClick = { showTopMenu = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "Inventory Menu")
@@ -76,7 +122,6 @@ fun InventoryScreen(
                     DropdownMenu(
                         expanded = showTopMenu,
                         onDismissRequest = { showTopMenu = false },
-                        modifier = Modifier.background(Color(0xFFE6E1D1))
                     ) {
                         DropdownMenuItem(
                             text = { Text("Reports") },
@@ -90,7 +135,6 @@ fun InventoryScreen(
                             text = { Text("Sync") },
                             onClick = {
                                 showTopMenu = false
-                                showCheckmark = true
                                 scope.launch {
                                     snackbarHostState.showSnackbar("Sync successful")
                                 }
@@ -103,14 +147,14 @@ fun InventoryScreen(
                                 showTopMenu = false
                                 authViewModel.logout()
                             },
-                            leadingIcon = { Icon(Icons.Default.ExitToApp, null) }
+                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.ExitToApp, null) }
                         )
                     }
                 }
             )
         },
         bottomBar = {
-            BottomAppBar(containerColor = Color(0xFFF3EEDF), tonalElevation = 4.dp) {
+            BottomAppBar() {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
@@ -119,18 +163,23 @@ fun InventoryScreen(
                     BottomBarButton(Icons.Default.Add, "Add Item") {
                         inventoryViewModel.openNewItem()
                     }
-                    BottomBarButton(Icons.Default.Edit, "Edit Item") {
-                        selectedItem?.let { inventoryViewModel.editItem(it) }
+                    BottomBarButton(
+                        icon = Icons.Default.Edit,
+                        label = "Edit Item",
+                        enabled = selectedItems.size == 1
+                    ) {
+                        selectedItems.firstOrNull()?.let { inventoryViewModel.editItem(it) }
                     }
-                    BottomBarButton(Icons.Default.Delete, "Delete Item") {
-                        if (selectedItem != null) {
-                            showDeleteConfirmationDialog = true
-                        }
+                    BottomBarButton(
+                        icon = Icons.Default.Delete,
+                        label = "Delete Item",
+                        enabled = selectedItems.isNotEmpty()
+                    ) {
+                        showDeleteConfirmationDialog = true
                     }
                 }
             }
         },
-        containerColor = Color(0xFFF5F2E9)
     ) { padding ->
         Column(
             modifier = Modifier
@@ -138,6 +187,18 @@ fun InventoryScreen(
                 .padding(padding)
                 .padding(horizontal = 16.dp)
         ) {
+            if (itemsToReorder.isNotEmpty()) {
+                ReorderAlert(items = itemsToReorder)
+            }
+
+            AnimatedVisibility(
+                visible = isOffline,
+                enter = expandVertically(),
+                exit = shrinkVertically()
+            ) {
+                OfflineWarning()
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(
                 value = searchQuery,
@@ -157,9 +218,9 @@ fun InventoryScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("List item", fontWeight = FontWeight.SemiBold,modifier = Modifier.weight(1f))
-                Text("Price", fontWeight = FontWeight.SemiBold,modifier = Modifier.weight(1f))
-                Text("Qt.", fontWeight = FontWeight.SemiBold,modifier = Modifier.weight(0.5f))
-                Text("Status", fontWeight = FontWeight.SemiBold,modifier = Modifier.weight(0.3f))
+                Text("Price", fontWeight = FontWeight.SemiBold,modifier = Modifier.weight(0.7f))
+                Text("Qt.", fontWeight = FontWeight.SemiBold,modifier = Modifier.weight(0.32f))
+                Text("Status", fontWeight = FontWeight.SemiBold, maxLines = 1)
             }
 
             LazyColumn (
@@ -169,37 +230,44 @@ fun InventoryScreen(
                 items(filteredItems) { item ->
                     InventoryItemRow(
                         item = item,
-                        selected = selectedItem == item,
+                        selected = item in selectedItems,
                         onItemClick = { clickedItem ->
-                            selectedItem = clickedItem
-                            showItemDetailsDialog = true
+                            selectedItems = if (clickedItem in selectedItems) {
+                                selectedItems - clickedItem
+                            } else {
+                                selectedItems + clickedItem
+                            }
                         },
-                        showCheckmark = showCheckmark
+                        onImageClick = {
+                            itemForDetails = it
+                            showItemDetailsDialog = true
+                        }
                     )
                 }
                 item {
-                    HorizontalDivider(color = Color.Gray, thickness = 1.dp)
+                    HorizontalDivider()
                 }
             }
         }
     }
 
     // Item Details Dialog
-    if (showItemDetailsDialog && selectedItem != null) {
+    if (showItemDetailsDialog && itemForDetails != null) {
         ItemDetailsDialog(
-            item = selectedItem!!,
+            item = itemForDetails!!,
             onDismiss = { showItemDetailsDialog = false }
         )
     }
 
     // Delete Confirmation Dialog
     if (showDeleteConfirmationDialog) {
-        DeleteItemConfirmationDialog(
+        DeleteItemsConfirmationDialog(
+            itemsToDelete = selectedItems,
             onConfirm = {
-                selectedItem?.let {
-                    inventoryViewModel.deleteItem(userId, it)
-                    selectedItem = null
+                selectedItems.forEach { item ->
+                    inventoryViewModel.deleteItem(userId, item)
                 }
+                selectedItems = emptyList()
                 showDeleteConfirmationDialog = false
             },
             onDismiss = { showDeleteConfirmationDialog = false }
@@ -218,20 +286,66 @@ fun InventoryScreen(
             onDescriptionChanged = { inventoryViewModel.updateEditorDescription(it) },
             onPriceChanged = { inventoryViewModel.updateEditorPrice(it) },
             onSkuChanged = { inventoryViewModel.updateEditorSku(it) },
+            onReorderPointChanged = { inventoryViewModel.updateEditorReorderPoint(it) },
             onSave = { inventoryViewModel.saveEditor(userId) }
         )
     }
 }
 
 @Composable
-fun DeleteItemConfirmationDialog(
+fun OfflineWarning() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.secondaryContainer)
+            .padding(8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            "You're offline. Edits will be saved locally.",
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+}
+
+@Composable
+fun ReorderAlert(items: List<InventoryItem>) {
+    val message = if (items.size == 1) {
+        "${items.first().name} is low on stock."
+    } else {
+        "Multiple items are low on stock."
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.errorContainer)
+            .padding(16.dp)
+    ) {
+        Text(
+            text = message,
+            color = MaterialTheme.colorScheme.onErrorContainer,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+fun DeleteItemsConfirmationDialog(
+    itemsToDelete: List<InventoryItem>,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val title = if (itemsToDelete.size == 1) "Delete Item" else "Delete Items"
+    val text = if (itemsToDelete.size == 1) {
+        "Are you sure you want to delete this item?"
+    } else {
+        "Are you sure you want to delete ${itemsToDelete.size} items?"
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Delete Item") },
-        text = { Text("Are you sure you want to delete this item?") },
+        title = { Text(title) },
+        text = { Text(text) },
         confirmButton = {
             Button(
                 onClick = onConfirm,
@@ -253,107 +367,72 @@ fun InventoryItemRow(
     item: InventoryItem,
     selected: Boolean,
     onItemClick: (InventoryItem) -> Unit,
-    showCheckmark: Boolean
+    onImageClick: (InventoryItem) -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onItemClick(item) }
-            .background(if (selected) Color(0xFFDDEBF7) else Color.Transparent)
-            .padding(vertical = 8.dp),
+            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
+            .padding(vertical = 8.dp)
+            .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMedium)),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            painterResource(id = R.drawable.itemdefault),
-            contentDescription = "Item thumbnail",
-            modifier = Modifier.size(40.dp),
-            tint = Color.Gray
-        )
+        if (item.imageRes != null) {
+            Image(
+                painter = painterResource(id = item.imageRes!!),
+                contentDescription = "Item thumbnail",
+                modifier = Modifier
+                    .size(40.dp)
+                    .clickable { onImageClick(item) }
+            )
+        } else {
+            Icon(
+                painterResource(id = R.drawable.itemdefault),
+                contentDescription = "Item thumbnail",
+                modifier = Modifier
+                    .size(40.dp)
+                    .clickable { onImageClick(item) },
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+        }
         Spacer(modifier = Modifier.width(8.dp))
-        Text(item.name, modifier = Modifier.weight(1f))
-        Text(item.price, modifier = Modifier.weight(1f))
-        Text(item.quantity.toString(), modifier = Modifier.weight(0.5f))
-        Box (modifier = Modifier.weight(0.3f),
-             contentAlignment = Alignment.Center) {
-            if (item.inStock) {
-                val icon = if (showCheckmark) Icons.Default.Check else Icons.Default.Sync
-                Icon(icon, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(20.dp))
+        Text(item.name, modifier = Modifier.weight(1f), overflow = TextOverflow.Ellipsis, maxLines = 1)
+        Text(item.price, modifier = Modifier.weight(0.7f), maxLines = 1)
+        Text(item.quantity.toString(), modifier = Modifier.weight(0.32f), maxLines = 1)
+        Box(modifier = Modifier.padding(start = 8.dp), contentAlignment = Alignment.Center) {
+            if (item.hasPendingWrites) {
+                Icon(
+                    Icons.Default.Sync, "Syncing",
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            } else {
+                Icon(
+                    Icons.Default.Check, "Synced",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
     }
 }
 
 @Composable
-fun RowScope.BottomBarButton(icon: ImageVector, label: String, onClick: () -> Unit) {
+fun RowScope.BottomBarButton(
+    icon: ImageVector,
+    label: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    val color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
     Column(
-        modifier = Modifier.weight(1f).clickable(onClick = onClick),
+        modifier = Modifier
+            .weight(1f)
+            .clickable(enabled = enabled, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(icon, contentDescription = label, tint = Color.Black)
-        Text(label, fontSize = 11.sp)
+        Icon(icon, contentDescription = label, tint = color)
+        Text(label, fontSize = 11.sp, color = color)
     }
-}
-
-@Composable
-fun ItemDetailsDialog(
-    item: InventoryItem,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {},
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-
-                // Large image
-                item.imageRes?.let { resId ->
-                    Image(
-                        painter = painterResource(id = resId),
-                        contentDescription = item.name,
-                        modifier = Modifier
-                            .size(100.dp)
-                            .clip(RoundedCornerShape(12.dp)),
-                        contentScale = ContentScale.Crop
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-
-                // Brief overview text
-                Text(
-                    text = item.name,
-                    style = MaterialTheme.typography.headlineSmall
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "Quantity: ${item.quantity}",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-
-                Text(
-                    text = "${item.sku}",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-
-                Text(
-                    text = "Price: ${item.price}",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-
-                item.description?.let {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    )
 }
