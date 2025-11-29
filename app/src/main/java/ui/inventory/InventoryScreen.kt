@@ -1,5 +1,11 @@
 package com.example.storeit.ui.inventory
 
+import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
@@ -14,7 +20,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,11 +38,9 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomAppBar
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -52,6 +55,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,21 +64,26 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.storeit.R
 import com.example.storeit.data.model.InventoryItem
 import com.example.storeit.ui.auth.AuthViewModel
+import com.example.storeit.ui.components.BottomBarButton
+import com.example.storeit.ui.components.DeleteItemConfirmationDialog
 import com.example.storeit.ui.components.ItemDetailsDialog
 import com.example.storeit.ui.components.ItemEditorDialog
+import com.example.storeit.ui.theme.StoreItBlue_Selection_Light
 import com.example.storeit.utils.ConnectionState
 import com.example.storeit.utils.currentConnectionState
+import com.example.storeit.utils.generateCsvContent
+import com.example.storeit.utils.launchCsvExport
+import com.example.storeit.utils.writeCsvToFile
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -83,15 +92,34 @@ fun InventoryScreen(
     navController: NavController,
     authViewModel: AuthViewModel,
     inventoryViewModel: InventoryViewModel,
-    userId: String,
     onToggleTheme: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var showTopMenu by remember { mutableStateOf(false) }
 
     var selectedItems by remember { mutableStateOf<List<InventoryItem>>(emptyList()) }
-    val uiState by inventoryViewModel.uiState.collectAsState(initial = InventoryUiState())
-    val filteredItems = uiState.items.filter {
+    val authUiState by authViewModel.uiState.collectAsState()
+    val inventoryUiState by inventoryViewModel.uiState.collectAsState()
+
+    val context = LocalContext.current
+    val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+
+    val csvLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.data?.let { uri ->
+                val content = generateCsvContent(inventoryUiState.items)
+                writeCsvToFile(context, uri, content)
+            }
+        }
+    }
+
+    // When the item list is updated from the db, refresh the selection to hold the new objects
+    LaunchedEffect(inventoryUiState.items) {
+        val selectedIds = selectedItems.map { it.id }.toSet()
+        selectedItems = inventoryUiState.items.filter { it.id in selectedIds }
+    }
+
+    val filteredItems = inventoryUiState.items.filter {
         it.name.contains(searchQuery, ignoreCase = true) ||
                 (it.sku?.contains(searchQuery, ignoreCase = true) ?: false)
     }
@@ -105,18 +133,34 @@ fun InventoryScreen(
     val connection by currentConnectionState()
     val isOffline = connection === ConnectionState.Unavailable
 
-    val itemsToReorder = uiState.items.filter { it.needsReorder }
+    val itemsToReorder = inventoryUiState.items.filter { it.needsReorder }
 
     // Open editor dialog
-    val editorState = uiState.editorState
-    val isEditorOpen = uiState.isEditorOpen
-    val editorError = uiState.editorError
+    val editorState = inventoryUiState.editorState
+    val isEditorOpen = inventoryUiState.isEditorOpen
+    val editorError = inventoryUiState.editorError
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Inventory", fontWeight = FontWeight.Medium) },
+                title = {
+                    Column {
+                        Text(authUiState.inventoryName ?: "Inventory", fontWeight = FontWeight.Medium)
+                        authUiState.inventoryId?.let { 
+                            Text(
+                                text = it, 
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.clickable {
+                                    clipboardManager.setPrimaryClip(ClipData.newPlainText("Inventory ID", it))
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Inventory ID copied to clipboard")
+                                    }
+                                }
+                            )
+                        }
+                    }
+                },
                 actions = {
                     IconButton(onClick = { showTopMenu = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "Inventory Menu")
@@ -126,12 +170,28 @@ fun InventoryScreen(
                         onDismissRequest = { showTopMenu = false },
                     ) {
                         DropdownMenuItem(
+                            text = { Text("Export to CSV") },
+                            onClick = {
+                                showTopMenu = false
+                                launchCsvExport(context, csvLauncher, authUiState.inventoryName ?: "Inventory")
+                            },
+                            leadingIcon = { Icon(painterResource(id = R.drawable.ic_export_csv), null) }
+                        )
+                        DropdownMenuItem(
                             text = { Text("Reports") },
                             onClick = {
                                 showTopMenu = false
                                 navController.navigate("reports")
                             },
                             leadingIcon = { Icon(painterResource(id = R.drawable.reports), null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Switch Inventory") },
+                            onClick = {
+                                showTopMenu = false
+                                authViewModel.clearInventorySelection()
+                            },
+                            leadingIcon = { Icon(Icons.Default.SwapHoriz, "Switch Inventory") }
                         )
                         DropdownMenuItem(
                             text = { Text("Sync") },
@@ -164,28 +224,38 @@ fun InventoryScreen(
             )
         },
         bottomBar = {
-            BottomAppBar() {
+            BottomAppBar {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    horizontalArrangement = Arrangement.SpaceAround,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    BottomBarButton(Icons.Default.Add, "Add Item") {
-                        inventoryViewModel.openNewItem()
-                    }
-                    BottomBarButton(
-                        icon = Icons.Default.Edit,
-                        label = "Edit Item",
-                        enabled = selectedItems.size == 1
-                    ) {
-                        selectedItems.firstOrNull()?.let { inventoryViewModel.editItem(it) }
-                    }
-                    BottomBarButton(
-                        icon = Icons.Default.Delete,
-                        label = "Delete Item",
-                        enabled = selectedItems.isNotEmpty()
-                    ) {
-                        showDeleteConfirmationDialog = true
+                    if (authUiState.userRole == "admin") {
+                        BottomBarButton(Icons.Default.Add, "Add Item") {
+                            inventoryViewModel.openNewItem()
+                        }
+                        BottomBarButton(
+                            icon = Icons.Default.Edit,
+                            label = "Edit Item",
+                            enabled = selectedItems.size == 1
+                        ) {
+                            selectedItems.firstOrNull()?.let { inventoryViewModel.editItem(it) }
+                        }
+                        BottomBarButton(
+                            icon = Icons.Default.Delete,
+                            label = "Delete Item",
+                            enabled = selectedItems.isNotEmpty()
+                        ) {
+                            showDeleteConfirmationDialog = true
+                        }
+                    } else {
+                        BottomBarButton(
+                            icon = Icons.Default.Edit,
+                            label = "Edit Quantity",
+                            enabled = selectedItems.size == 1
+                        ) {
+                            selectedItems.firstOrNull()?.let { inventoryViewModel.editItem(it) }
+                        }
                     }
                 }
             }
@@ -271,34 +341,40 @@ fun InventoryScreen(
 
     // Delete Confirmation Dialog
     if (showDeleteConfirmationDialog) {
-        DeleteItemsConfirmationDialog(
-            itemsToDelete = selectedItems,
-            onConfirm = {
-                selectedItems.forEach { item ->
-                    inventoryViewModel.deleteItem(userId, item)
-                }
-                selectedItems = emptyList()
-                showDeleteConfirmationDialog = false
-            },
-            onDismiss = { showDeleteConfirmationDialog = false }
-        )
+        val inventoryId = authUiState.inventoryId
+        if (inventoryId != null) {
+            DeleteItemConfirmationDialog(
+                onConfirm = {
+                    selectedItems.forEach { item ->
+                        inventoryViewModel.deleteItem(inventoryId, item)
+                    }
+                    selectedItems = emptyList()
+                    showDeleteConfirmationDialog = false
+                },
+                onDismiss = { showDeleteConfirmationDialog = false }
+            )
+        }
     }
 
     // Editor Dialog (Add/Edit)
     if (isEditorOpen) {
-        ItemEditorDialog(
-            editorState = editorState,
-            isSaving = uiState.isSaving,
-            errorMessage = editorError,
-            onDismiss = { inventoryViewModel.dismissEditor() },
-            onNameChanged = { inventoryViewModel.updateEditorName(it) },
-            onQuantityChanged = { inventoryViewModel.updateEditorQuantity(it) },
-            onDescriptionChanged = { inventoryViewModel.updateEditorDescription(it) },
-            onPriceChanged = { inventoryViewModel.updateEditorPrice(it) },
-            onSkuChanged = { inventoryViewModel.updateEditorSku(it) },
-            onReorderPointChanged = { inventoryViewModel.updateEditorReorderPoint(it) },
-            onSave = { inventoryViewModel.saveEditor(userId) }
-        )
+        val inventoryId = authUiState.inventoryId
+        if (inventoryId != null) {
+            ItemEditorDialog(
+                editorState = editorState,
+                isSaving = inventoryUiState.isSaving,
+                errorMessage = editorError,
+                onDismiss = { inventoryViewModel.dismissEditor() },
+                onNameChanged = { inventoryViewModel.updateEditorName(it) },
+                onQuantityChanged = { inventoryViewModel.updateEditorQuantity(it) },
+                onDescriptionChanged = { inventoryViewModel.updateEditorDescription(it) },
+                onPriceChanged = { inventoryViewModel.updateEditorPrice(it) },
+                onSkuChanged = { inventoryViewModel.updateEditorSku(it) },
+                onReorderPointChanged = { inventoryViewModel.updateEditorReorderPoint(it) },
+                onSave = { inventoryViewModel.saveEditor(inventoryId) },
+                isEmployee = authUiState.userRole == "employee"
+            )
+        }
     }
 }
 
@@ -340,39 +416,6 @@ fun ReorderAlert(items: List<InventoryItem>) {
 }
 
 @Composable
-fun DeleteItemsConfirmationDialog(
-    itemsToDelete: List<InventoryItem>,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val title = if (itemsToDelete.size == 1) "Delete Item" else "Delete Items"
-    val text = if (itemsToDelete.size == 1) {
-        "Are you sure you want to delete this item?"
-    } else {
-        "Are you sure you want to delete ${itemsToDelete.size} items?"
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = { Text(text) },
-        confirmButton = {
-            Button(
-                onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-            ) {
-                Text("Delete")
-            }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
 fun InventoryItemRow(
     item: InventoryItem,
     selected: Boolean,
@@ -383,14 +426,14 @@ fun InventoryItemRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onItemClick(item) }
-            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
+            .background(if (selected) StoreItBlue_Selection_Light else MaterialTheme.colorScheme.surface)
             .padding(vertical = 8.dp)
             .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMedium)),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (item.imageRes != null) {
             Image(
-                painter = painterResource(id = item.imageRes!!),
+                painter = painterResource(id = item.imageRes),
                 contentDescription = "Item thumbnail",
                 modifier = Modifier
                     .size(40.dp)
@@ -408,9 +451,9 @@ fun InventoryItemRow(
         }
         Spacer(modifier = Modifier.width(8.dp))
         Text(item.name, modifier = Modifier.weight(1f), overflow = TextOverflow.Ellipsis, maxLines = 1)
-        Text(item.price, modifier = Modifier.weight(0.7f), maxLines = 1)
+        Text("$" + item.price, modifier = Modifier.weight(0.7f), maxLines = 1)
         Text(item.quantity.toString(), modifier = Modifier.weight(0.32f), maxLines = 1)
-        Box(modifier = Modifier.padding(start = 8.dp), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.padding(start = 8.dp).weight(0.3f), contentAlignment = Alignment.Center) {
             if (item.hasPendingWrites) {
                 Icon(
                     Icons.Default.Sync, "Syncing",
@@ -425,24 +468,5 @@ fun InventoryItemRow(
                 )
             }
         }
-    }
-}
-
-@Composable
-fun RowScope.BottomBarButton(
-    icon: ImageVector,
-    label: String,
-    enabled: Boolean = true,
-    onClick: () -> Unit
-) {
-    val color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-    Column(
-        modifier = Modifier
-            .weight(1f)
-            .clickable(enabled = enabled, onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(icon, contentDescription = label, tint = color)
-        Text(label, fontSize = 11.sp, color = color)
     }
 }

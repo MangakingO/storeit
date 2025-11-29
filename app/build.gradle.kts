@@ -57,6 +57,8 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.5")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui")
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
+
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

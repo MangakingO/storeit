@@ -6,12 +6,17 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.example.storeit.R
 
 // Set of Material typography styles to start with
 
+val Quicksand = FontFamily(
+    Font(R.font.quicksandlight, FontWeight.Light),
+)
+
 val Typography = Typography(
     bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = Quicksand,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,

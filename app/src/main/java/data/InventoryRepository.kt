@@ -1,5 +1,6 @@
 package com.example.storeit.data
 
+import com.example.storeit.data.model.ItemChange
 import com.example.storeit.data.model.InventoryItem
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -7,15 +8,23 @@ import com.google.firebase.firestore.MetadataChanges
 import kotlinx.coroutines.tasks.await
 
 /**
- * Provides CRUD access to user scoped inventory collections stored in Firestore.
+ * Provides CRUD access to a specified inventory collection stored in Firestore.
  */
 class InventoryRepository(private val firestore: FirebaseFirestore) {
 
-    private fun userItemsCollection(userId: String) =
-        firestore.collection("users").document(userId).collection("items")
+    private fun inventoryItemsCollection(inventoryId: String) =
+        firestore.collection("inventories").document(inventoryId).collection("items")
 
-    fun listenToItems(userId: String, onItemsUpdated: (List<InventoryItem>) -> Unit): ListenerRegistration {
-        return userItemsCollection(userId)
+    suspend fun getInventoryName(inventoryId: String): String {
+        return try {
+            firestore.collection("inventories").document(inventoryId).get().await().getString("name") ?: ""
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    fun listenToItems(inventoryId: String, onItemsUpdated: (List<InventoryItem>) -> Unit): ListenerRegistration {
+        return inventoryItemsCollection(inventoryId)
             .orderBy("name")
             .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
                 if (error != null) {
@@ -33,7 +42,7 @@ class InventoryRepository(private val firestore: FirebaseFirestore) {
     }
 
     suspend fun addItem(
-        userId: String,
+        inventoryId: String,
         name: String,
         quantity: Int,
         description: String?,
@@ -53,11 +62,11 @@ class InventoryRepository(private val firestore: FirebaseFirestore) {
             "imageRes" to imageRes,
             "reorderPoint" to reorderPoint
         )
-        userItemsCollection(userId).add(data).await()
+        inventoryItemsCollection(inventoryId).add(data).await()
     }
 
     suspend fun updateItem(
-        userId: String,
+        inventoryId: String,
         itemId: String,
         name: String,
         quantity: Int,
@@ -78,11 +87,15 @@ class InventoryRepository(private val firestore: FirebaseFirestore) {
             "imageRes" to imageRes,
             "reorderPoint" to reorderPoint
         )
-        userItemsCollection(userId).document(itemId).set(data).await()
+        inventoryItemsCollection(inventoryId).document(itemId).set(data).await()
     }
 
-    suspend fun deleteItem(userId: String, itemId: String) {
+    suspend fun deleteItem(inventoryId: String, itemId: String) {
         if (itemId.isBlank()) return
-        userItemsCollection(userId).document(itemId).delete().await()
+        inventoryItemsCollection(inventoryId).document(itemId).delete().await()
+    }
+
+    suspend fun logItemChange(inventoryId: String, itemChange: ItemChange) {
+        firestore.collection("inventories").document(inventoryId).collection("item_changes").add(itemChange).await()
     }
 }

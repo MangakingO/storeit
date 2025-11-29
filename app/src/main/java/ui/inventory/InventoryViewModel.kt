@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.storeit.data.model.InventoryItem
 import com.example.storeit.data.InventoryRepository
+import com.example.storeit.data.model.ItemChange
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -106,7 +107,7 @@ class InventoryViewModel(private val repository: InventoryRepository) : ViewMode
     // -----------------------------
     // Save New OR Edited Item
     // -----------------------------
-    fun saveEditor(userId: String) {
+    fun saveEditor(inventoryId: String) {
         val editor = uiState.value.editorState
 
         if (!editor.isValid) {
@@ -123,7 +124,7 @@ class InventoryViewModel(private val repository: InventoryRepository) : ViewMode
                 val reorderPoint = editor.reorderPoint.toIntOrNull()
                 if (editor.id == null) {
                     repository.addItem(
-                        userId,
+                        inventoryId,
                         editor.name,
                         editor.quantity.toInt(),
                         editor.description.ifBlank { null },
@@ -133,9 +134,12 @@ class InventoryViewModel(private val repository: InventoryRepository) : ViewMode
                         editor.imageRes,
                         reorderPoint
                     )
+                    repository.logItemChange(inventoryId, ItemChange(itemName = editor.name, changeType = "Created"))
                 } else {
+                    val oldItem = _uiState.value.items.find { it.id == editor.id }
+
                     repository.updateItem(
-                        userId,
+                        inventoryId,
                         editor.id,
                         editor.name,
                         editor.quantity.toInt(),
@@ -146,6 +150,15 @@ class InventoryViewModel(private val repository: InventoryRepository) : ViewMode
                         editor.imageRes,
                         reorderPoint
                     )
+
+                    if (oldItem != null) {
+                        if (oldItem.quantity != editor.quantity.toInt()) {
+                            repository.logItemChange(inventoryId, ItemChange(itemId = editor.id, itemName = editor.name, changeType = "Quantity Changed", oldValue = oldItem.quantity.toString(), newValue = editor.quantity))
+                        }
+                        if (oldItem.name != editor.name) {
+                            repository.logItemChange(inventoryId, ItemChange(itemId = editor.id, itemName = editor.name, changeType = "Name Changed", oldValue = oldItem.name, newValue = editor.name))
+                        }
+                    }
                 }
 
                 _uiState.value = _uiState.value.copy(
@@ -164,9 +177,10 @@ class InventoryViewModel(private val repository: InventoryRepository) : ViewMode
     // -----------------------------
     // Delete Item
     // -----------------------------
-    fun deleteItem(userId: String, item: InventoryItem) {
+    fun deleteItem(inventoryId: String, item: InventoryItem) {
         viewModelScope.launch {
-            repository.deleteItem(userId, item.id)
+            repository.deleteItem(inventoryId, item.id)
+            repository.logItemChange(inventoryId, ItemChange(itemId = item.id, itemName = item.name, changeType = "Deleted"))
         }
     }
 
