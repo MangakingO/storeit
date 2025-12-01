@@ -10,7 +10,10 @@ service cloud.firestore {
 
     // Allow users to read and write to inventories they are a member of
     match /inventories/{inventoryId} {
-      allow read, write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.inventories[inventoryId] != null;
+      // Allow any authenticated user to check if an inventory exists
+      allow get: if request.auth != null;
+      // Allow members to list items and make changes
+      allow list, write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.inventories[inventoryId] != null;
 
       // Allow users to read and write to items in inventories they are a member of
       match /items/{itemId} {
